@@ -1730,10 +1730,34 @@ class RedisProtocol(asyncio.Protocol, metaclass=_RedisProtocolMeta):
         return self._query(tr, b'hset', self.encode_from_native(key), self.encode_from_native(field), self.encode_from_native(value))
 
     @_query_command
-    def hmset(self, tr, key:NativeType, values:dict) -> StatusReply:
+    def hmset(self, tr, key:NativeType, values:dict, attempt_conversion:bool=True) -> StatusReply:
         """ Set multiple hash fields to multiple values """
+        def convert_dict_vals(entry):
+            # Dict objects may contain numerical or object entries.
+            # If the entry is an object, then it must have a `__str__` implementation.
+
+            # return if the entry is already `native_type`
+            if isinstance(entry, self.native_type):
+                return entry
+
+            if isinstance(self.native_type, bytes):
+                return str(entry).encode()
+            elif isinstance(self.native_type, str):
+                return str(entry)
+            else:
+                # For custom types that users might implement from BaseEncoder objects
+                try:
+                    return self.native_type(entry)
+                except:
+                    return str(entry)
+
         data = [ ]
+
         for k,v in values.items():
+            if attempt_conversion:
+                k = convert_dict_val(k)
+                v = convert_dict_val(v)
+
             assert isinstance(k, self.native_type)
             assert isinstance(v, self.native_type)
 
